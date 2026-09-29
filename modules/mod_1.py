@@ -2,26 +2,24 @@ import requests
 
 def handle(params):
     """
-    מודול 1: העברת/שיתוף קבצים בין מערכות ימות המשיח
-    מצב 1: הזנה ידנית של קובץ המקור
-    מצב 2: שליחה מתוך שלוחת השמעת קבצים (נשלח פרמטר what)
+    מודול 1: העברת/שיתוף קבצים בין מערכות
+    שמירה ישירות בשלוחה שנבחרה (גם בשלוחה ראשית: ivr2:/M1000.wav)
     """
 
     # -----------------------------------------------------------
     # שלב 1: זיהוי קובץ המקור
     # -----------------------------------------------------------
-    source_path = params.get('what')  # נשלח אוטומטית במצב של השמעת קבצים
+    source_path = params.get('what')  # מגיע אוטומטית מתוך שלוחת השמעת קבצים
 
     if not source_path:
-        # מצב 1: המאזין צריך להזין את מספר הקובץ במערכת הנוכחית
+        # מצב 1: הזנה ידנית של קובץ המקור
         source_file = params.get('source_file')
         if not source_file:
             return "read=t-נא הקישו את מספר הקובץ שברצונכם לשתף, או כוכבית וארבע ספרות להודעת מערכת=source_file,,10,3,Digits,no"
         
-        # פענוח הקובץ שנבחר
         source_file = source_file.strip()
         if source_file.startswith('*'):
-            source_path = f"ivr2:/messages/M{source_file[1:]}.wav"
+            source_path = f"ivr2:/M{source_file[1:]}.wav"
         else:
             source_folder = params.get('source_folder', '1').strip('/')
             source_path = f"ivr2:/{source_folder}/{source_file}.wav"
@@ -29,8 +27,6 @@ def handle(params):
     # -----------------------------------------------------------
     # שלב 2: השגת טוקן/סיסמה למערכת המקור
     # -----------------------------------------------------------
-    # אם הגדרת מראש בהגדרות השלוחה source_token, נשתמש בו ישירות.
-    # אם לא, נבקש מהמאזין את סיסמת הניהול של המערכת הנוכחית.
     source_token = params.get('source_token')
     if not source_token:
         source_pass = params.get('source_password')
@@ -40,7 +36,7 @@ def handle(params):
         source_token = f"{source_did}:{source_pass}"
 
     # -----------------------------------------------------------
-    # שלב 3: בקשת פרטי מערכת היעד
+    # שלב 3: בקשת פרטי מערכת היעד (מספר מערכת וסיסמה)
     # -----------------------------------------------------------
     target_did = params.get('target_did')
     if not target_did:
@@ -59,23 +55,40 @@ def handle(params):
 
     target_file = target_file.strip()
 
-    # בדיקת תקינות הקשה: אם מתחיל ב-* חובה 4 ספרות אחריו
+    # בדיקת תקינות אם נבחרה הודעת מערכת
     if target_file.startswith('*'):
         msg_digits = target_file[1:]
         if len(msg_digits) != 4 or not msg_digits.isdigit():
-            # מחיקת ההקשה השגויה ובקשה מחדש
             params.pop('target_file', None)
             return "read=t-שגיאה. להודעת מערכת יש להקיש כוכבית ולאחריה בדיוק ארבע ספרות=target_file,,10,3,Digits,no"
-        target_path = f"ivr2:/messages/M{msg_digits}.wav"
+        target_filename = f"M{msg_digits}.wav"
     else:
-        # קובץ רגיל בשלוחה (ברירת מחדל שלוחה 1, ניתן לקבוע ב-target_folder)
-        target_folder = params.get('target_folder', '1').strip('/')
-        target_path = f"ivr2:/{target_folder}/{target_file}.wav"
+        target_filename = f"{target_file}.wav"
+
+    # -----------------------------------------------------------
+    # שלב 5: בקשת שלוחת היעד
+    # -----------------------------------------------------------
+    target_folder = params.get('target_folder')
+    if not target_folder:
+        return "read=t-הקישו את מספר שלוחת היעד. לשלוחה ראשית הקישו כוכבית וסולמית=target_folder,,10,1,Digits,no"
+
+    target_folder = target_folder.strip()
+
+    # בדיקה האם נבחרה שלוחה ראשית (* או *# או 0)
+    is_root = target_folder in ('*', '*#', '0')
+
+    if is_root:
+        # שמירה ישירות בשלוחה הראשית: ivr2:/M1000.wav או ivr2:/001.wav
+        target_path = f"ivr2:/{target_filename}"
+    else:
+        # שמירה בתוך שלוחה/תת-שלוחה: ivr2:/1/M1000.wav או ivr2:/1/001.wav
+        folder_clean = target_folder.replace('*', '/').strip('/')
+        target_path = f"ivr2:/{folder_clean}/{target_filename}"
 
     target_token = f"{target_did}:{target_pass}"
 
     # -----------------------------------------------------------
-    # שלב 5: ביצוע ההורדה ממערכת המקור
+    # שלב 6: ביצוע ההורדה ממערכת המקור
     # -----------------------------------------------------------
     try:
         download_url = "https://www.call2all.co.il/ym/api/DownloadFile"
@@ -92,14 +105,14 @@ def handle(params):
         return "id_list_message=t-אירעה שגיאת תקשורת בהורדת הקובץ"
 
     # -----------------------------------------------------------
-    # שלב 6: העלאת הקובץ למערכת היעד
+    # שלב 7: העלאת הקובץ למערכת היעד
     # -----------------------------------------------------------
     try:
         upload_url = "https://www.call2all.co.il/ym/api/UploadFile"
         up_params = {
             "token": target_token,
             "path": target_path,
-            "convertAudio": "0"  # הקובץ כבר בפורמט תואם, אין צורך בהמרה
+            "convertAudio": "0"
         }
         files = {
             "file": ("audio.wav", down_res.content, "audio/wav")
@@ -114,7 +127,6 @@ def handle(params):
 
         result_data = up_res.json()
         if result_data.get('responseStatus') == 'OK':
-            # הצלחה!
             return "id_list_message=t-הקובץ הועבר בהצלחה למערכת היעד"
         else:
             print(f"Yemot Upload Error: {result_data}")
