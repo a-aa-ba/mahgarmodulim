@@ -1,9 +1,29 @@
 import requests
 
+def get_p(params, num, fallback_key=None):
+    """
+    פונקציית עזר לקליטת פרמטר לפי מספרו הסידורי.
+    תומכת בפורמטים: P-1, P=1, P1 (כולל אותיות קטנות/גדולות).
+    """
+    keys = [
+        f"P-{num}", f"P={num}", f"P{num}",
+        f"p-{num}", f"p={num}", f"p{num}",
+        f"P_{num}", f"p_{num}"
+    ]
+    if fallback_key:
+        keys.append(fallback_key)
+        
+    for k in keys:
+        val = params.get(k)
+        if val is not None and str(val).strip() != "":
+            return str(val).strip()
+    return None
+
+
 def handle(params):
     """
     מודול העברת/שיתוף קבצים בין מערכות ימות המשיח.
-    תמיכה בפרמטרים קבועים P1 עד P8 לפי סדר השאלות.
+    תמיכה בפרמטרים קבועים P=1 / P-1 עד P=8 / P-8 לפי סדר השאלות.
     """
 
     # בדיקה האם הגענו מתוך השמעת קבצים (מהפרמטר what)
@@ -16,15 +36,15 @@ def handle(params):
         # נתיב ושם הקובץ נלקחים ישירות מימות המשיח
         source_path = params.get('what')
 
-        # שאלה 1: מספר מערכת מקור (P1, או ברירת מחדל ApiDID)
-        source_did = params.get('P1') or params.get('source_did') or params.get('ApiDID', '')
+        # שאלה 1: מספר מערכת מקור (P=1 / P-1, או ברירת מחדל ApiDID)
+        source_did = get_p(params, 1, 'source_did') or params.get('ApiDID', '')
         if not source_did:
             return "read=t-נא הקישו את מספר מערכת המקור=source_did,,10,7,Digits,no"
 
-        # שאלה 2: סיסמת מערכת מקור (P2)
+        # שאלה 2: סיסמת מערכת מקור (P=2 / P-2)
         source_token = params.get('source_token')
         if not source_token:
-            source_pass = params.get('P2') or params.get('source_password')
+            source_pass = get_p(params, 2, 'source_password')
             if not source_pass:
                 return "read=t-נא הקישו את סיסמת הניהול של מערכת זו=source_password,,10,4,Digits,no"
             source_token = f"{source_did}:{source_pass}"
@@ -33,26 +53,26 @@ def handle(params):
     # מצב ב': שלוחה עצמאית (איסוף פרטי המקור לפי הסדר)
     # ===========================================================
     else:
-        # שאלה 1: מספר מערכת מקור (P1)
-        source_did = params.get('P1') or params.get('source_did') or params.get('ApiDID')
+        # שאלה 1: מספר מערכת מקור (P=1 / P-1)
+        source_did = get_p(params, 1, 'source_did') or params.get('ApiDID')
         if not source_did:
             return "read=t-נא הקישו את מספר מערכת המקור=source_did,,10,7,Digits,no"
 
-        # שאלה 2: סיסמת מערכת מקור (P2)
+        # שאלה 2: סיסמת מערכת מקור (P=2 / P-2)
         source_token = params.get('source_token')
         if not source_token:
-            source_pass = params.get('P2') or params.get('source_password')
+            source_pass = get_p(params, 2, 'source_password')
             if not source_pass:
                 return "read=t-נא הקישו את סיסמת הניהול של מערכת המקור=source_password,,10,4,Digits,no"
             source_token = f"{source_did}:{source_pass}"
 
-        # שאלה 3: שלוחת מקור (P3)
-        source_folder = params.get('P3') or params.get('source_folder')
+        # שאלה 3: שלוחת מקור (P=3 / P-3)
+        source_folder = get_p(params, 3, 'source_folder')
         if not source_folder:
             return "read=t-הקישו את שלוחת המקור. לשלוחה ראשית הקישו כוכבית וסולמית=source_folder,,10,1,Digits,no"
 
-        # שאלה 4: שם/מספר קובץ מקור (P4)
-        source_file = params.get('P4') or params.get('source_file')
+        # שאלה 4: שם/מספר קובץ מקור (P=4 / P-4)
+        source_file = get_p(params, 4, 'source_file')
         if not source_file:
             return "read=t-נא הקישו את מספר הקובץ שברצונכם לשתף, או כוכבית וארבע ספרות להודעת מערכת=source_file,,10,3,Digits,no"
 
@@ -76,28 +96,28 @@ def handle(params):
     # איסוף פרטי מערכת היעד (משותף לשני המצבים לפי הסדר)
     # ===========================================================
 
-    # שאלה 5: מספר מערכת יעד (P5)
-    target_did = params.get('P5') or params.get('target_did')
+    # שאלה 5: מספר מערכת יעד (P=5 / P-5)
+    target_did = get_p(params, 5, 'target_did')
     if not target_did:
         return "read=t-נא הקישו את מספר מערכת היעד=target_did,,10,7,Digits,no"
 
-    # שאלה 6: סיסמת מערכת יעד (P6)
-    target_pass = params.get('P6') or params.get('target_password')
+    # שאלה 6: סיסמת מערכת יעד (P=6 / P-6)
+    target_pass = get_p(params, 6, 'target_password')
     if not target_pass:
         return "read=t-נא הקישו את סיסמת הניהול של מערכת היעד=target_password,,10,4,Digits,no"
 
     target_token = f"{target_did}:{target_pass}"
 
-    # שאלה 7: נתיב/שלוחה ביעד (P7)
-    target_folder = params.get('P7') or params.get('target_folder')
+    # שאלה 7: נתיב/שלוחה ביעד (P=7 / P-7)
+    target_folder = get_p(params, 7, 'target_folder')
     if not target_folder:
         return "read=t-הקישו את מספר שלוחת היעד. לשלוחה ראשית הקישו כוכבית וסולמית=target_folder,,10,1,Digits,no"
 
-    # שאלה 8: שם הקובץ ביעד (P8)
+    # שאלה 8: שם הקובץ ביעד (P=8 / P-8)
     target_filename = None
-    target_file = params.get('P8') or params.get('target_file')
+    target_file = get_p(params, 8, 'target_file')
 
-    # אם אנחנו בהשמעת קבצים ולא נשלח מראש P8 / target_file, נותנים בחירה
+    # אם אנחנו בהשמעת קבצים ולא נשלח מראש שם קובץ יעד, נותנים בחירה
     if is_playback and not target_file:
         keep_name = params.get('keep_name')
         if not keep_name:
@@ -116,7 +136,6 @@ def handle(params):
             msg_digits = target_file[1:]
             if len(msg_digits) != 4 or not msg_digits.isdigit():
                 params.pop('target_file', None)
-                params.pop('P8', None)
                 return "read=t-שגיאה. להודעת מערכת יש להקיש כוכבית ולאחריה בדיוק ארבע ספרות=target_file,,10,3,Digits,no"
             target_filename = f"M{msg_digits}.wav"
         else:
